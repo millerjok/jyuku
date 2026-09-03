@@ -33,23 +33,20 @@ import { BrandLogo } from '@/components/brand-logo';
 import { PdfViewer } from '@/components/pdf-viewer';
 import { usePresentationSync } from '@/hooks/use-presentation-sync';
 import { readBrowserQuizScores } from '@/lib/quiz-score-storage';
-
-const ADMIN_PASSWORD = 'zoe123';
-const SESSION_KEY = 'ss_admin_auth';
+import { getAdminPassword, setAdminPassword, clearAdminPassword, isAdminUnlocked, isAuthError } from '@/lib/admin-auth';
 
 // ─── Password Gate ────────────────────────────────────────────────────────────
+// There's no hardcoded password to check client-side — PRESENTER_PASSWORD
+// lives server-side (often a random value the host generated at deploy
+// time). Whatever's typed here is stored and sent with admin requests; a
+// wrong password surfaces as a 401 on the first real action.
 function AdminPasswordGate({ onUnlock, onClose }: { onUnlock: () => void; onClose: () => void }) {
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem(SESSION_KEY, '1');
-      onUnlock();
-    } else {
-      setError(true);
-    }
+    setAdminPassword(password);
+    onUnlock();
   };
 
   return (
@@ -79,13 +76,13 @@ function AdminPasswordGate({ onUnlock, onClose }: { onUnlock: () => void; onClos
                 type="password"
                 placeholder="Enter password"
                 value={password}
-                onChange={e => { setPassword(e.target.value); setError(false); }}
-                className={`h-12 text-lg px-4 bg-black/40 ${error ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                onChange={e => setPassword(e.target.value)}
+                className="h-12 text-lg px-4 bg-black/40"
                 autoFocus
               />
-              {error && (
-                <p className="text-sm text-destructive font-medium">Incorrect password. Please try again.</p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                If this is wrong, the first action you take (like publishing) will fail — come back here and try again.
+              </p>
             </div>
             <Button type="submit" className="w-full h-12 text-lg font-semibold">
               Unlock
@@ -427,6 +424,17 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const { mutateAsync: stopLiveMutation } = useSetPresentationLive();
   const { data: allPresentations, refetch: refetchList } = useListPresentations();
 
+  // Wrong presenter password only surfaces once a real admin request hits
+  // the server (see lib/admin-auth.ts) — when it does, bounce back to the
+  // gate instead of leaving the dashboard silently broken.
+  const handleAdminAuthFailure = (err: unknown): boolean => {
+    if (!isAuthError(err)) return false;
+    clearAdminPassword();
+    window.alert('Incorrect presenter password. Please sign in again.');
+    onSignOut();
+    return true;
+  };
+
   const { data: currentPres, refetch: refetchCurrentPres } = useGetPresentation(presentationId || '', {
     query: {
       enabled: !!presentationId && uploadStatus === 'converting',
@@ -546,7 +554,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setPublishError(null);
     setPublishingPresentationId(id);
     try {
-      await publishPresentation({ id, data: { password: ADMIN_PASSWORD, published } });
+      await publishPresentation({ id, data: { password: getAdminPassword(), published } });
       await refetchList();
       queryClient.invalidateQueries({ queryKey: getListPresentationsQueryKey() });
       if (presentationId === id) {
@@ -554,6 +562,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       }
     } catch (err) {
       console.error('Failed to update presentation publishing state', err);
+      if (handleAdminAuthFailure(err)) return;
       setPublishError(`Could not ${published ? 'publish' : 'unpublish'} that presentation. Please try again.`);
     } finally {
       setPublishingPresentationId(null);
@@ -568,7 +577,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setDeleteError(null);
     setDeletingPresentationId(id);
     try {
-      await deletePresentation({ id, data: { password: 'zoe123' } });
+      await deletePresentation({ id, data: { password: getAdminPassword() } });
       await refetchList();
       queryClient.invalidateQueries({ queryKey: getListPresentationsQueryKey() });
       if (presentationId === id) {
@@ -576,6 +585,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       }
     } catch (err) {
       console.error('Failed to delete presentation', err);
+      if (handleAdminAuthFailure(err)) return;
       setDeleteError('Could not delete that presentation. Please try again.');
     } finally {
       setDeletingPresentationId(null);
@@ -590,10 +600,11 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setGeneratingQuizId(id);
     setQuizMessage(null);
     try {
-      await generateQuiz({ id, data: { password: ADMIN_PASSWORD } });
+      await generateQuiz({ id, data: { password: getAdminPassword() } });
       setQuizMessage(`Quiz ready for “${presentationTitle}”. Students can now start it from the homepage.`);
     } catch (err) {
       console.error('Failed to generate quiz', err);
+      if (handleAdminAuthFailure(err)) return;
       setQuizMessage(`Could not create the quiz for “${presentationTitle}”. Please try again.`);
     } finally {
       setGeneratingQuizId(null);
@@ -609,10 +620,11 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setOpenResultsId(id);
     setResultsError(null);
     try {
-      const results = await getQuizResults({ id, data: { password: ADMIN_PASSWORD } });
+      const results = await getQuizResults({ id, data: { password: getAdminPassword() } });
       setResultsByPresentation(previous => ({ ...previous, [id]: results }));
     } catch (err) {
       console.error('Failed to load quiz results', err);
+      if (handleAdminAuthFailure(err)) return;
       setResultsError('No quiz results are available yet. Create the quiz and have students complete it first.');
     }
   };
@@ -637,7 +649,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     }
 
     try {
-      await updatePresentation({ id, data: { password: ADMIN_PASSWORD, title: nextTitle } });
+      await updatePresentation({ id, data: { password: getAdminPassword(), title: nextTitle } });
       await refetchList();
       queryClient.invalidateQueries({ queryKey: getListPresentationsQueryKey() });
       if (presentationId === id) {
@@ -647,6 +659,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       cancelRename();
     } catch (err) {
       console.error('Failed to rename presentation', err);
+      if (handleAdminAuthFailure(err)) return;
       setRenameError('Could not rename that presentation. Please try again.');
     }
   };
@@ -654,11 +667,12 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const handleStopLive = async (id: string) => {
     setStoppingLiveId(id);
     try {
-      await stopLiveMutation({ id, data: { password: ADMIN_PASSWORD, live: false } });
+      await stopLiveMutation({ id, data: { password: getAdminPassword(), live: false } });
       queryClient.invalidateQueries({ queryKey: getListPresentationsQueryKey() });
       await refetchList();
     } catch (err) {
       console.error('Failed to stop live presentation', err);
+      if (handleAdminAuthFailure(err)) return;
     } finally {
       setStoppingLiveId(null);
     }
@@ -1019,7 +1033,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
 // ─── Root export ──────────────────────────────────────────────────────────────
 export default function Home() {
   const [view, setView] = useState<'viewer' | 'gate' | 'admin'>(() => {
-    return sessionStorage.getItem(SESSION_KEY) === '1' ? 'admin' : 'viewer';
+    return isAdminUnlocked() ? 'admin' : 'viewer';
   });
 
   if (view === 'gate') {
@@ -1027,7 +1041,7 @@ export default function Home() {
   }
 
   if (view === 'admin') {
-    return <AdminDashboard onSignOut={() => { sessionStorage.removeItem(SESSION_KEY); setView('viewer'); }} />;
+    return <AdminDashboard onSignOut={() => { clearAdminPassword(); setView('viewer'); }} />;
   }
 
   return <ViewerLanding onAdminClick={() => setView('gate')} />;

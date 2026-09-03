@@ -10,22 +10,23 @@ import { usePresentationSync } from '@/hooks/use-presentation-sync';
 import { PdfViewer } from '@/components/pdf-viewer';
 import { useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/brand-logo';
+import { getAdminPassword, setAdminPassword, clearAdminPassword, isAdminUnlocked, isAuthError } from '@/lib/admin-auth';
 
 export default function PresenterPage() {
   const [, params] = useRoute('/present/:id');
   const [, setLocation] = useLocation();
   const id = params?.id;
-  const ADMIN_SESSION_KEY = 'ss_admin_auth';
-  
+
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
   // Tracks whether we've already called the API to stop the presentation,
   // so the auto-cleanup effects don't send a redundant request.
   const hasExitedRef = useRef(false);
-  
-  const [isAuthenticated, setIsAuthenticated] = useState(() => (
-    sessionStorage.getItem(ADMIN_SESSION_KEY) === '1'
-  ));
+
+  // There's no way to verify a password client-side (PRESENTER_PASSWORD
+  // lives server-side), so entry here is optimistic — the real check
+  // happens when startLivePresentation below makes its first request.
+  const [isAuthenticated, setIsAuthenticated] = useState(isAdminUnlocked);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState(false);
   
@@ -60,11 +61,18 @@ export default function PresenterPage() {
     setCurrentSlide(presentation.currentSlide);
     const startLivePresentation = async () => {
       try {
-        await setPresentationLive({ id, data: { password: 'zoe123', live: true } });
-        await updateSlide({ id, data: { password: 'zoe123', slideIndex: presentation.currentSlide } });
+        await setPresentationLive({ id, data: { password: getAdminPassword(), live: true } });
+        await updateSlide({ id, data: { password: getAdminPassword(), slideIndex: presentation.currentSlide } });
       } catch (err) {
         initializedPresentationRef.current = null;
         console.error('Failed to start live presentation', err);
+        if (isAuthError(err)) {
+          // The stored password was wrong — bounce back to the gate rather
+          // than sitting on a "connecting" screen that will never resolve.
+          clearAdminPassword();
+          setIsAuthenticated(false);
+          setPasswordError(true);
+        }
       }
     };
     void startLivePresentation();
@@ -72,16 +80,12 @@ export default function PresenterPage() {
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'zoe123') {
-      setIsAuthenticated(true);
-      sessionStorage.setItem(ADMIN_SESSION_KEY, '1');
-      setPasswordError(false);
-      // Initialize local slide to server's current slide
-      if (presentation) {
-        setCurrentSlide(presentation.currentSlide);
-      }
-    } else {
-      setPasswordError(true);
+    setAdminPassword(password);
+    setIsAuthenticated(true);
+    setPasswordError(false);
+    // Initialize local slide to server's current slide
+    if (presentation) {
+      setCurrentSlide(presentation.currentSlide);
     }
   };
 
@@ -97,7 +101,7 @@ export default function PresenterPage() {
 
     // Persist to DB
     try {
-      await updateSlide({ id, data: { password: 'zoe123', slideIndex: newIndex } });
+      await updateSlide({ id, data: { password: getAdminPassword(), slideIndex: newIndex } });
     } catch (err) {
       console.error('Failed to update slide in DB', err);
     }
@@ -185,7 +189,7 @@ export default function PresenterPage() {
       void fetch(`/api/presentations/${id}/live`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: 'zoe123', live: false }),
+        body: JSON.stringify({ password: getAdminPassword(), live: false }),
         keepalive: true,
       });
     };
@@ -199,7 +203,7 @@ export default function PresenterPage() {
       void fetch(`/api/presentations/${id}/live`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: 'zoe123', live: false }),
+        body: JSON.stringify({ password: getAdminPassword(), live: false }),
         keepalive: true,
       });
     };
@@ -216,7 +220,7 @@ export default function PresenterPage() {
       if (id) {
         await setPresentationLive({
           id,
-          data: { password: 'zoe123', live: false },
+          data: { password: getAdminPassword(), live: false },
         });
       }
       if (document.fullscreenElement) {
