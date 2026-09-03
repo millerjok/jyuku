@@ -253,6 +253,15 @@ export default function QuizPage() {
           <p className="font-mono text-6xl font-bold text-[#f0d875]" aria-live="assertive">
             {graceSecondsLeft}
           </p>
+          <Button
+            type="button"
+            className="h-11 gap-2"
+            // This click is a fresh user gesture, so unlike our automatic
+            // reentry attempt, the browser will actually grant this one.
+            onClick={() => void containerRef.current?.requestFullscreen().catch(() => {})}
+          >
+            Return to fullscreen
+          </Button>
         </div>
       )}
       <header className="sticky top-0 z-20 border-b border-[#d8bf5e]/50 bg-[#843b49]">
