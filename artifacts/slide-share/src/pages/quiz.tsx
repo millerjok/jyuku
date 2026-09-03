@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { BrandLogo } from '@/components/brand-logo';
 import { saveBrowserQuizScore } from '@/lib/quiz-score-storage';
 
+const GRACE_PERIOD_MS = 10_000;
+
 const FIREWORK_PARTICLES = Array.from({ length: 12 }, (_, index) => index * 30);
 const FIREWORK_BURSTS = [
   { left: 16, top: 24, delay: 0, color: '#f0d875' },
@@ -85,26 +87,66 @@ export default function QuizPage() {
   // been submitted (score set) — reviewing results is fine outside fullscreen.
   const isAttemptActive = hasStarted && !score;
 
-  // Anti-cheating: leaving fullscreen while a quiz attempt is active ends
-  // it immediately. We also try to re-request fullscreen right away, but
-  // most browsers block requestFullscreen() calls that aren't triggered by
-  // a fresh user gesture (a fullscreenchange event doesn't count), so that
-  // call is best-effort — the termination below is what actually matters.
+  // Anti-cheating: leaving fullscreen OR switching away from the tab
+  // (alt-tab, minimizing — detected via the Page Visibility API) while a
+  // quiz attempt is active starts a 10s grace-period countdown. Coming
+  // fully back (fullscreen restored AND the tab visible again) before it
+  // expires cancels the countdown and the attempt continues normally;
+  // otherwise the attempt ends when time runs out.
+  const [graceDeadline, setGraceDeadline] = useState<number | null>(null);
+  const [graceSecondsLeft, setGraceSecondsLeft] = useState(0);
+
+  const terminateQuiz = useCallback(() => {
+    setGraceDeadline(null);
+    setHasStarted(false);
+    setCurrentQuestion(0);
+    setAnswers([]);
+    setQuizTerminated(true);
+  }, []);
+
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (document.fullscreenElement || !isAttemptActive) return;
+    if (!isAttemptActive) return;
 
+    const hasLeft = () => !document.fullscreenElement || document.hidden;
+
+    const handlePotentialExit = () => {
+      if (!hasLeft()) {
+        setGraceDeadline(null);
+        return;
+      }
+      // Only start the countdown once per departure — repeated events
+      // (fullscreenchange + visibilitychange can both fire) shouldn't
+      // reset an already-running grace period.
+      setGraceDeadline(current => current ?? Date.now() + GRACE_PERIOD_MS);
+      // Best-effort: browsers generally block a requestFullscreen() call
+      // that isn't triggered by a fresh user gesture, so this may no-op.
       void containerRef.current?.requestFullscreen().catch(() => {});
-
-      setHasStarted(false);
-      setCurrentQuestion(0);
-      setAnswers([]);
-      setQuizTerminated(true);
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('fullscreenchange', handlePotentialExit);
+    document.addEventListener('visibilitychange', handlePotentialExit);
+    return () => {
+      document.removeEventListener('fullscreenchange', handlePotentialExit);
+      document.removeEventListener('visibilitychange', handlePotentialExit);
+    };
   }, [isAttemptActive]);
+
+  useEffect(() => {
+    if (graceDeadline === null) return;
+
+    const tick = () => {
+      const remainingMs = graceDeadline - Date.now();
+      if (remainingMs <= 0) {
+        terminateQuiz();
+        return;
+      }
+      setGraceSecondsLeft(Math.ceil(remainingMs / 1000));
+    };
+
+    tick();
+    const interval = setInterval(tick, 200);
+    return () => clearInterval(interval);
+  }, [graceDeadline, terminateQuiz]);
 
   const playTone = useCallback((frequency: number, duration: number, startDelay = 0, volume = 0.05) => {
     if (typeof window === 'undefined') return;
@@ -202,6 +244,17 @@ export default function QuizPage() {
 
   return (
     <div ref={containerRef} className="min-h-screen bg-background text-foreground">
+      {graceDeadline !== null && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/90 p-6 text-center text-white">
+          <p className="text-2xl font-bold">You left the quiz view</p>
+          <p className="max-w-sm text-white/80">
+            Return to fullscreen on this tab or your attempt will end automatically.
+          </p>
+          <p className="font-mono text-6xl font-bold text-[#f0d875]" aria-live="assertive">
+            {graceSecondsLeft}
+          </p>
+        </div>
+      )}
       <header className="sticky top-0 z-20 border-b border-[#d8bf5e]/50 bg-[#843b49]">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-3">
@@ -347,7 +400,7 @@ export default function QuizPage() {
             <CardContent>
               {quizTerminated && (
                 <p className="mb-5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm font-medium text-destructive">
-                  Your attempt ended because you left fullscreen. Start again and stay in fullscreen until you submit.
+                  Your attempt ended because you left the quiz view (exited fullscreen or switched tabs) for too long. Start again and stay in fullscreen on this tab until you submit.
                 </p>
               )}
               <form onSubmit={startQuiz} className="space-y-5">
