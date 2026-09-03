@@ -33,20 +33,31 @@ import { BrandLogo } from '@/components/brand-logo';
 import { PdfViewer } from '@/components/pdf-viewer';
 import { usePresentationSync } from '@/hooks/use-presentation-sync';
 import { readBrowserQuizScores } from '@/lib/quiz-score-storage';
-import { getAdminPassword, setAdminPassword, clearAdminPassword, isAdminUnlocked, isAuthError } from '@/lib/admin-auth';
+import { getAdminPassword, setAdminPassword, clearAdminPassword, isAdminUnlocked, isAuthError, verifyAdminPassword } from '@/lib/admin-auth';
 
 // ─── Password Gate ────────────────────────────────────────────────────────────
-// There's no hardcoded password to check client-side — PRESENTER_PASSWORD
-// lives server-side (often a random value the host generated at deploy
-// time). Whatever's typed here is stored and sent with admin requests; a
-// wrong password surfaces as a 401 on the first real action.
+// PRESENTER_PASSWORD lives server-side (often a random value the host
+// generated at deploy time), so the typed password is checked against
+// POST /api/auth/verify before the dashboard is ever rendered.
 function AdminPasswordGate({ onUnlock, onClose }: { onUnlock: () => void; onClose: () => void }) {
   const [password, setPassword] = useState('');
+  const [error, setError] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAdminPassword(password);
-    onUnlock();
+    setError(false);
+    setVerifying(true);
+    try {
+      if (await verifyAdminPassword(password)) {
+        setAdminPassword(password);
+        onUnlock();
+      } else {
+        setError(true);
+      }
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -76,16 +87,16 @@ function AdminPasswordGate({ onUnlock, onClose }: { onUnlock: () => void; onClos
                 type="password"
                 placeholder="Enter password"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="h-12 text-lg px-4 bg-black/40"
+                onChange={e => { setPassword(e.target.value); setError(false); }}
+                className={`h-12 text-lg px-4 bg-black/40 ${error ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 autoFocus
               />
-              <p className="text-xs text-muted-foreground">
-                If this is wrong, the first action you take (like publishing) will fail — come back here and try again.
-              </p>
+              {error && (
+                <p className="text-sm text-destructive font-medium">Incorrect password. Please try again.</p>
+              )}
             </div>
-            <Button type="submit" className="w-full h-12 text-lg font-semibold">
-              Unlock
+            <Button type="submit" className="w-full h-12 text-lg font-semibold" disabled={verifying}>
+              {verifying ? 'Checking…' : 'Unlock'}
             </Button>
           </form>
         </CardContent>

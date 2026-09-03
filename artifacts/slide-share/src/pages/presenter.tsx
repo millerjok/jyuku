@@ -10,7 +10,7 @@ import { usePresentationSync } from '@/hooks/use-presentation-sync';
 import { PdfViewer } from '@/components/pdf-viewer';
 import { useQueryClient } from '@tanstack/react-query';
 import { BrandLogo } from '@/components/brand-logo';
-import { getAdminPassword, setAdminPassword, clearAdminPassword, isAdminUnlocked, isAuthError } from '@/lib/admin-auth';
+import { getAdminPassword, setAdminPassword, clearAdminPassword, isAdminUnlocked, isAuthError, verifyAdminPassword } from '@/lib/admin-auth';
 
 export default function PresenterPage() {
   const [, params] = useRoute('/present/:id');
@@ -23,12 +23,12 @@ export default function PresenterPage() {
   // so the auto-cleanup effects don't send a redundant request.
   const hasExitedRef = useRef(false);
 
-  // There's no way to verify a password client-side (PRESENTER_PASSWORD
-  // lives server-side), so entry here is optimistic — the real check
-  // happens when startLivePresentation below makes its first request.
+  // PRESENTER_PASSWORD lives server-side, so the typed password is checked
+  // against POST /api/auth/verify before access is granted.
   const [isAuthenticated, setIsAuthenticated] = useState(isAdminUnlocked);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -78,14 +78,23 @@ export default function PresenterPage() {
     void startLivePresentation();
   }, [id, isAuthenticated, presentation, setCurrentSlide, setPresentationLive, updateSlide]);
 
-  const handleUnlock = (e: React.FormEvent) => {
+  const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAdminPassword(password);
-    setIsAuthenticated(true);
     setPasswordError(false);
-    // Initialize local slide to server's current slide
-    if (presentation) {
-      setCurrentSlide(presentation.currentSlide);
+    setVerifying(true);
+    try {
+      if (!(await verifyAdminPassword(password))) {
+        setPasswordError(true);
+        return;
+      }
+      setAdminPassword(password);
+      setIsAuthenticated(true);
+      // Initialize local slide to server's current slide
+      if (presentation) {
+        setCurrentSlide(presentation.currentSlide);
+      }
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -275,8 +284,8 @@ export default function PresenterPage() {
                   <p className="text-sm text-destructive font-medium">Incorrect password. Please try again.</p>
                 )}
               </div>
-              <Button type="submit" className="w-full h-12 text-lg font-semibold">
-                Unlock Booth
+              <Button type="submit" className="w-full h-12 text-lg font-semibold" disabled={verifying}>
+                {verifying ? 'Checking…' : 'Unlock Booth'}
               </Button>
             </form>
           </CardContent>
