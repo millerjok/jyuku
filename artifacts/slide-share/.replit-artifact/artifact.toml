@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "SlideShare"
+description = "A real-time presentation sharing web app. Users can upload PPT, PDF, or Google Slides exports, get a shareable link, and share presentations live. A password-protected presenter mode (password: zoe123) lets the host control which slide is shown, and all viewers see that same slide in real time via WebSocket."
+version = "1.0.0"
+id = "artifacts/slide-share"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24963
+
+[services.development]
+run = "pnpm --filter @workspace/slide-share run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/slide-share", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/slide-share/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24963"
+BASE_PATH = "/"

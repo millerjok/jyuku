@@ -1,0 +1,723 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification for SlideShare - real-time presentation sharing
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: presentations
+    description: Presentation operations
+  - name: storage
+    description: File storage operations
+  - name: quizzes
+    description: Presentation quiz operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /presentations:
+    get:
+      operationId: listPresentations
+      tags: [presentations]
+      summary: List all presentations
+      responses:
+        "200":
+          description: List of presentations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Presentation"
+    post:
+      operationId: createPresentation
+      tags: [presentations]
+      summary: Create a new presentation record after upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresentationInput"
+      responses:
+        "201":
+          description: Created presentation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Presentation"
+        "400":
+          description: Invalid input
+
+  /presentations/{id}:
+    get:
+      operationId: getPresentation
+      tags: [presentations]
+      summary: Get presentation by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Presentation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Presentation"
+        "404":
+          description: Not found
+    patch:
+      operationId: updatePresentation
+      tags: [presentations]
+      summary: Rename a presentation (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresentationUpdate"
+      responses:
+        "200":
+          description: Renamed presentation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Presentation"
+        "400":
+          description: Invalid title
+        "401":
+          description: Unauthorized - wrong password
+        "404":
+          description: Not found
+    delete:
+      operationId: deletePresentation
+      tags: [presentations]
+      summary: Delete a presentation and its uploaded file (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPassword"
+      responses:
+        "200":
+          description: Deleted presentation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletePresentationResult"
+        "401":
+          description: Unauthorized - wrong password
+        "404":
+          description: Not found
+
+  /presentations/{id}/slide:
+    patch:
+      operationId: updateSlide
+      tags: [presentations]
+      summary: Update the current slide (presenter only, requires password)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SlideUpdate"
+      responses:
+        "200":
+          description: Updated presentation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Presentation"
+        "401":
+          description: Unauthorized - wrong password
+        "404":
+          description: Not found
+
+  /presentations/{id}/publish:
+    patch:
+      operationId: publishPresentation
+      tags: [presentations]
+      summary: Publish or unpublish a presentation (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishPresentation"
+      responses:
+        "200":
+          description: Updated presentation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Presentation"
+        "401":
+          description: Unauthorized - wrong password
+        "404":
+          description: Not found
+
+  /presentations/{id}/live:
+    patch:
+      operationId: setPresentationLive
+      tags: [presentations]
+      summary: Start or stop the live presentation state (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LivePresentationUpdate"
+      responses:
+        "200":
+          description: Updated presentation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Presentation"
+        "401":
+          description: Unauthorized - wrong password
+        "404":
+          description: Not found
+
+  /presentations/{id}/quiz:
+    get:
+      operationId: getPresentationQuiz
+      tags: [quizzes]
+      summary: Get the public quiz for a presentation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public quiz questions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiz"
+        "404":
+          description: Quiz not found
+
+  /presentations/{id}/quiz/generate:
+    post:
+      operationId: generatePresentationQuiz
+      tags: [quizzes]
+      summary: Generate a 20-question quiz from a presentation (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPassword"
+      responses:
+        "200":
+          description: Generated quiz
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiz"
+        "401":
+          description: Unauthorized - wrong password
+        "404":
+          description: Presentation not found
+        "500":
+          description: Quiz generation failed
+
+  /presentations/{id}/quiz/attempts:
+    post:
+      operationId: submitQuizAttempt
+      tags: [quizzes]
+      summary: Submit a student's quiz answers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuizAttemptInput"
+      responses:
+        "201":
+          description: Recorded quiz result with answer review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuizSubmissionResult"
+        "400":
+          description: Invalid quiz submission
+        "404":
+          description: Quiz not found
+
+  /presentations/{id}/quiz/grade:
+    post:
+      operationId: gradePresentationQuiz
+      tags: [quizzes]
+      summary: Grade quiz answers without saving a student attempt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuizAnswers"
+      responses:
+        "200":
+          description: Quiz score and answer review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuizGradeResult"
+        "400":
+          description: Invalid quiz submission
+        "404":
+          description: Quiz not found
+
+  /presentations/{id}/quiz/results:
+    post:
+      operationId: getQuizResults
+      tags: [quizzes]
+      summary: List quiz results for a presentation (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPassword"
+      responses:
+        "200":
+          description: Quiz results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuizAttempt"
+        "401":
+          description: Unauthorized - wrong password
+        "404":
+          description: Quiz not found
+
+  /presentations/{id}/convert:
+    post:
+      operationId: convertPresentation
+      tags: [presentations]
+      summary: Trigger PPT to PDF conversion for a presentation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversion result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversionResult"
+        "404":
+          description: Not found
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned URL for uploading a file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL and object path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Invalid input
+
+  /storage/objects/{objectPath}:
+    get:
+      operationId: getObject
+      tags: [storage]
+      summary: Serve a stored object
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content
+        "404":
+          description: Not found
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    Presentation:
+      type: object
+      required: [id, title, fileName, fileObjectPath, status, currentSlide, maxRevealedSlide, isPublished, isLive, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        fileName:
+          type: string
+        fileObjectPath:
+          type: string
+        pdfObjectPath:
+          type: ["string", "null"]
+        slideCount:
+          type: ["number", "null"]
+        currentSlide:
+          type: number
+        maxRevealedSlide:
+          type: number
+        status:
+          type: string
+          enum: [pending, converting, ready, error]
+        isPublished:
+          type: boolean
+        isLive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PresentationInput:
+      type: object
+      required: [title, fileName, fileObjectPath, contentType]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        fileName:
+          type: string
+          minLength: 1
+        fileObjectPath:
+          type: string
+          minLength: 1
+        contentType:
+          type: string
+          minLength: 1
+
+    PresentationUpdate:
+      type: object
+      required: [password, title]
+      properties:
+        password:
+          type: string
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    AdminPassword:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    DeletePresentationResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    PublishPresentation:
+      type: object
+      required: [password, published]
+      properties:
+        password:
+          type: string
+        published:
+          type: boolean
+
+    LivePresentationUpdate:
+      type: object
+      required: [password, live]
+      properties:
+        password:
+          type: string
+        live:
+          type: boolean
+
+    QuizQuestion:
+      type: object
+      required: [question, options]
+      properties:
+        question:
+          type: string
+        options:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: string
+
+    Quiz:
+      type: object
+      required: [id, presentationId, status, questions, totalQuestions, createdAt]
+      properties:
+        id:
+          type: string
+        presentationId:
+          type: string
+        status:
+          type: string
+          enum: [ready]
+        questions:
+          type: array
+          minItems: 20
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/QuizQuestion"
+        totalQuestions:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+
+    QuizAttemptInput:
+      type: object
+      required: [studentName, answers]
+      properties:
+        studentName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        answers:
+          type: array
+          minItems: 20
+          maxItems: 20
+          items:
+            type: number
+            minimum: 0
+            maximum: 3
+
+    QuizAnswers:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          minItems: 20
+          maxItems: 20
+          items:
+            type: number
+            minimum: 0
+            maximum: 3
+
+    QuizAttempt:
+      type: object
+      required: [id, quizId, studentName, score, totalQuestions, createdAt]
+      properties:
+        id:
+          type: string
+        quizId:
+          type: string
+        studentName:
+          type: string
+        score:
+          type: number
+        totalQuestions:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+
+    QuizReviewItem:
+      type: object
+      required: [question, options, selectedIndex, correctIndex, isCorrect]
+      properties:
+        question:
+          type: string
+        options:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: string
+        selectedIndex:
+          type: number
+          minimum: 0
+          maximum: 3
+        correctIndex:
+          type: number
+          minimum: 0
+          maximum: 3
+        isCorrect:
+          type: boolean
+
+    QuizSubmissionResult:
+      type: object
+      required: [id, quizId, studentName, score, totalQuestions, createdAt, review]
+      properties:
+        id:
+          type: string
+        quizId:
+          type: string
+        studentName:
+          type: string
+        score:
+          type: number
+        totalQuestions:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        review:
+          type: array
+          minItems: 20
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/QuizReviewItem"
+
+    QuizGradeResult:
+      type: object
+      required: [score, totalQuestions, review]
+      properties:
+        score:
+          type: number
+        totalQuestions:
+          type: number
+        review:
+          type: array
+          minItems: 20
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/QuizReviewItem"
+
+    SlideUpdate:
+      type: object
+      required: [password, slideIndex]
+      properties:
+        password:
+          type: string
+        slideIndex:
+          type: number
+          minimum: 0
+
+    ConversionResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        pdfObjectPath:
+          type: ["string", "null"]
+        slideCount:
+          type: ["number", "null"]
+        error:
+          type: ["string", "null"]
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+        size:
+          type: number
+        contentType:
+          type: string
+
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string

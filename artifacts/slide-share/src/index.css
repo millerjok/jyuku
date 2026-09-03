@@ -1,0 +1,190 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover-border: hsl(var(--popover-border));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: 240 6% 8%;
+  --foreground: 48 36% 94%;
+  --card: 240 6% 12%;
+  --card-foreground: 48 36% 94%;
+  --card-border: 347 24% 30%;
+  --popover: 240 6% 12%;
+  --popover-foreground: 48 36% 94%;
+  --popover-border: 347 24% 30%;
+  
+  --primary: 48 76% 57%;
+  --primary-foreground: 345 30% 22%;
+  --secondary: 197 10% 30%;
+  --secondary-foreground: 48 36% 94%;
+  --muted: 240 4% 16%;
+  --muted-foreground: 48 12% 68%;
+  --accent: 347 39% 37%;
+  --accent-foreground: 48 36% 94%;
+  --destructive: 0 65% 48%;
+  --destructive-foreground: 48 36% 94%;
+  
+  --border: 347 24% 30%;
+  --input: 347 24% 30%;
+  --ring: 48 76% 57%;
+  
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+.pdf-text-layer {
+  --total-scale-factor: 1;
+  --min-font-size: 1;
+  --min-font-size-inv: 1;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-align: initial;
+  transform-origin: 0 0;
+  z-index: 1;
+}
+
+.pdf-text-layer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: pointer;
+  transform-origin: 0% 0%;
+  user-select: none;
+}
+
+.pdf-text-layer > :not(.markedContent),
+.pdf-text-layer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--total-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.pdf-text-layer span:hover {
+  background: rgba(240, 216, 117, 0.25);
+}
+
+.firework-burst {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.firework-core {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--firework-color);
+  box-shadow: 0 0 1.25rem 0.35rem var(--firework-color);
+  transform: translate(-50%, -50%) scale(0.2);
+  animation: firework-core 2.4s ease-out infinite;
+  animation-delay: var(--firework-delay);
+}
+
+.firework-spark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0.2rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--firework-color);
+  box-shadow: 0 0 0.45rem var(--firework-color);
+  transform: translate(-50%, -50%) rotate(var(--firework-angle)) translateY(0) scaleY(0.2);
+  transform-origin: 50% 0;
+  animation: firework-spark 2.4s ease-out infinite;
+  animation-delay: var(--firework-delay);
+}
+
+@keyframes firework-core {
+  0%, 18% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  28% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  48%, 100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.1);
+  }
+}
+
+@keyframes firework-spark {
+  0%, 18% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--firework-angle)) translateY(0) scaleY(0.2);
+  }
+  28% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--firework-angle)) translateY(0.4rem) scaleY(0.75);
+  }
+  76%, 100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--firework-angle)) translateY(4.5rem) scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .firework-core,
+  .firework-spark {
+    animation: none;
+    opacity: 0.65;
+  }
+}

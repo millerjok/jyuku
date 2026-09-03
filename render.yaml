@@ -1,0 +1,51 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# One-click setup: on render.com, "New +" -> "Blueprint", connect this repo.
+# Render reads this file and provisions the web service + database below.
+# Adjust the `plan` values to whatever's current on your Render account —
+# a persistent disk (for uploaded slide files) requires a paid web service
+# plan; the free plan works but loses uploads on every restart/redeploy.
+databases:
+  - name: slidesync-db
+    plan: free
+    databaseName: slidesync
+    user: slidesync
+
+services:
+  - type: web
+    name: slidesync
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/healthz
+    # Syncs the Postgres schema (no migration files — this project uses
+    # drizzle-kit push) before each new deploy goes live.
+    preDeployCommand: pnpm --filter db run push-force
+    disk:
+      name: slidesync-uploads
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: slidesync-db
+          property: connectionString
+      - key: OBJECT_STORAGE_DIR
+        value: /var/data/objects
+      # Password for presenter/admin actions (starting a presentation,
+      # generating quizzes). Render generates a random value on first
+      # deploy — find it under the service's Environment tab and share it
+      # with whoever presents.
+      - key: PRESENTER_PASSWORD
+        generateValue: true
+      # Optional: only needed for the AI quiz-generation feature. Leave
+      # unset and the rest of the app works fine; quiz generation returns
+      # an error until both are set.
+      - key: AI_INTEGRATIONS_OPENAI_API_KEY
+        sync: false
+      - key: AI_INTEGRATIONS_OPENAI_BASE_URL
+        sync: false

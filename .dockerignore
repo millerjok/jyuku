@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.agents
+.replit
+.replitignore
+replit.nix
+replit.md
+screenshots
+main.py
+pyproject.toml
+uv.lock
+.data
