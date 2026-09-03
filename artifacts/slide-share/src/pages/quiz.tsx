@@ -77,7 +77,34 @@ export default function QuizPage() {
   } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  const [quizTerminated, setQuizTerminated] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Mid-quiz only: not before the student has started, and not once it's
+  // been submitted (score set) — reviewing results is fine outside fullscreen.
+  const isAttemptActive = hasStarted && !score;
+
+  // Anti-cheating: leaving fullscreen while a quiz attempt is active ends
+  // it immediately. We also try to re-request fullscreen right away, but
+  // most browsers block requestFullscreen() calls that aren't triggered by
+  // a fresh user gesture (a fullscreenchange event doesn't count), so that
+  // call is best-effort — the termination below is what actually matters.
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement || !isAttemptActive) return;
+
+      void containerRef.current?.requestFullscreen().catch(() => {});
+
+      setHasStarted(false);
+      setCurrentQuestion(0);
+      setAnswers([]);
+      setQuizTerminated(true);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [isAttemptActive]);
 
   const playTone = useCallback((frequency: number, duration: number, startDelay = 0, volume = 0.05) => {
     if (typeof window === 'undefined') return;
@@ -129,7 +156,10 @@ export default function QuizPage() {
     event.preventDefault();
     if (!studentName.trim() || !quiz) return;
     setAnswers(Array.from({ length: quiz.questions.length }, () => -1));
+    setQuizTerminated(false);
     setHasStarted(true);
+    // This click is a genuine user gesture, so the browser allows it.
+    void containerRef.current?.requestFullscreen().catch(() => {});
   };
 
   const chooseAnswer = (answerIndex: number) => {
@@ -171,7 +201,7 @@ export default function QuizPage() {
   }, [playNextSound, quiz]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div ref={containerRef} className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-[#d8bf5e]/50 bg-[#843b49]">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-3">
@@ -315,6 +345,11 @@ export default function QuizPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {quizTerminated && (
+                <p className="mb-5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm font-medium text-destructive">
+                  Your attempt ended because you left fullscreen. Start again and stay in fullscreen until you submit.
+                </p>
+              )}
               <form onSubmit={startQuiz} className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="student-name">Your name</Label>
