@@ -44,8 +44,13 @@ services:
         generateValue: true
       # Optional: only needed for the AI quiz-generation feature. Leave
       # unset and the rest of the app works fine; quiz generation returns
-      # an error until both are set.
+      # an error until these are set. Works with any OpenAI-compatible
+      # endpoint — e.g. Groq's free tier: BASE_URL
+      # https://api.groq.com/openai/v1, API_KEY from console.groq.com.
       - key: AI_INTEGRATIONS_OPENAI_API_KEY
         sync: false
       - key: AI_INTEGRATIONS_OPENAI_BASE_URL
+        sync: false
+      # Optional: defaults to a Groq Llama model if unset.
+      - key: AI_INTEGRATIONS_OPENAI_MODEL
         sync: false

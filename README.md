@@ -47,8 +47,16 @@ whoever will be presenting.
 
 **Optional AI quizzes:** there's a quiz-generation feature that calls an
 OpenAI-compatible API. It's entirely optional — the rest of the app works
-without it. To enable it, set `AI_INTEGRATIONS_OPENAI_API_KEY` and
-`AI_INTEGRATIONS_OPENAI_BASE_URL` in the Render dashboard.
+without it. To enable it, get a free API key from
+[console.groq.com](https://console.groq.com) (no credit card required) and
+set these in the Render dashboard's Environment tab:
+
+- `AI_INTEGRATIONS_OPENAI_API_KEY` — your Groq key
+- `AI_INTEGRATIONS_OPENAI_BASE_URL` — `https://api.groq.com/openai/v1`
+
+Any other OpenAI-compatible provider works too — just point `BASE_URL` at
+it and set `AI_INTEGRATIONS_OPENAI_MODEL` to one of its model names if the
+default (a Groq Llama model) doesn't apply.
 
 ## Local development
 

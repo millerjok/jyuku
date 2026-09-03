@@ -145,8 +145,8 @@ async function extractPdfText(pdfObjectPath: string): Promise<string> {
 
 async function generateQuestionsFromText(text: string): Promise<QuizQuestion[]> {
   const response = await getOpenAIClient().chat.completions.create({
-    model: 'gpt-5.6-terra',
-    max_completion_tokens: 12_000,
+    model: process.env.AI_INTEGRATIONS_OPENAI_MODEL || 'llama-3.3-70b-versatile',
+    max_tokens: 12_000,
     response_format: { type: 'json_object' },
     messages: [
       {
