@@ -107,7 +107,7 @@ function AdminPasswordGate({ onUnlock, onClose }: { onUnlock: () => void; onClos
 
 // ─── Viewer Landing (non-admin) ───────────────────────────────────────────────
 export function ViewerLanding({ onAdminClick }: { onAdminClick: () => void }) {
-  const { data: presentations } = useListPresentations({
+  const { data: presentations, isError, refetch } = useListPresentations({
     query: {
       // Always re-fetch fresh data on mount (e.g. after admin exits presenter page)
       // so stale "isLive" or "isPublished" state is never shown to students.
@@ -184,12 +184,12 @@ export function ViewerLanding({ onAdminClick }: { onAdminClick: () => void }) {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground selection:bg-primary/30">
+    <div className="flex h-dvh flex-col bg-background text-foreground selection:bg-primary/30">
       {/* Header */}
       <header className="shrink-0 border-b border-[#d8bf5e]/50 bg-[#843b49] z-50">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
           <BrandLogo />
-          <Button variant="ghost" size="sm" onClick={onAdminClick} className="text-muted-foreground text-xs gap-1.5">
+          <Button variant="ghost" size="sm" onClick={onAdminClick} className="text-[#fff8df] hover:bg-[#6c3040] hover:text-[#f0d875] text-xs gap-1.5">
             <Lock className="w-3.5 h-3.5" />
             Admin
           </Button>
@@ -197,18 +197,21 @@ export function ViewerLanding({ onAdminClick }: { onAdminClick: () => void }) {
       </header>
 
       {/* Body: sidebar + main */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
 
         {/* ── Left sidebar (previous presentations) ── */}
         {previousPresentations.length > 0 && (
           <aside
-            className={`relative z-10 shrink-0 flex flex-col border-r border-[#d8bf5e]/20 bg-card/30 transition-all duration-300 ${sidebarOpen ? 'w-72' : 'w-12'}`}
+            id="previous-presentations"
+            className={`absolute inset-y-0 left-0 sm:relative z-30 shrink-0 flex flex-col border-r border-[#d8bf5e]/20 bg-card transition-all duration-300 ${sidebarOpen ? 'w-72 max-w-full' : 'w-12'}`}
           >
             {/* Toggle button — kept fully inside the aside so it never overlaps main */}
             <button
               onClick={() => setSidebarOpen(o => !o)}
               className="absolute right-2 top-4 flex h-8 w-8 items-center justify-center rounded-full border border-[#d8bf5e]/30 bg-[#843b49] text-[#fff8df] shadow-md hover:bg-[#6c3040] transition-colors"
               aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              aria-expanded={sidebarOpen}
+              aria-controls="previous-presentations"
             >
               {sidebarOpen
                 ? <PanelLeftClose className="h-4 w-4" />
@@ -230,8 +233,9 @@ export function ViewerLanding({ onAdminClick }: { onAdminClick: () => void }) {
                 <p className="text-xs font-semibold uppercase tracking-widest text-[#f0d875]">
                   Previous presentations
                 </p>
-                {previousPresentations.map(pres => {
+                {previousPresentations.map((pres, index) => {
                   const savedScore = quizScores[pres.id];
+                  const quizAvailable = quizQueries[index]?.isSuccess;
                   return (
                     <Card key={pres.id} className="bg-card/60 border-border/40 hover:bg-card/80 transition-colors">
                       <CardContent className="flex flex-col gap-2 p-3">
@@ -250,16 +254,16 @@ export function ViewerLanding({ onAdminClick }: { onAdminClick: () => void }) {
                           </div>
                           <p className="mt-0.5 text-[11px] text-muted-foreground">{new Date(pres.createdAt).toLocaleDateString()}</p>
                         </div>
-                        <Button variant="secondary" size="sm" className="w-full gap-1.5 text-xs h-7" asChild>
+                        <Button variant="secondary" size="sm" className="w-full gap-1.5 text-xs h-10" asChild>
                           <Link href={`/view/${pres.id}`}>
                             <Eye className="h-3 w-3" />
-                            Watch
+                            View slides
                           </Link>
                         </Button>
-                        <Button
+                        {quizAvailable && <Button
                           variant="outline"
                           size="sm"
-                          className={`h-7 w-full gap-1.5 text-xs ${
+                          className={`h-10 w-full gap-1.5 text-xs ${
                             quizQueries[previousPresentations.indexOf(pres)]?.isSuccess
                               ? 'border-[#f0d875]/50 text-[#f0d875] hover:bg-[#f0d875]/10 hover:text-[#f7e59b]'
                               : 'border-border/50 text-muted-foreground hover:bg-muted/20 hover:text-muted-foreground'
@@ -270,7 +274,7 @@ export function ViewerLanding({ onAdminClick }: { onAdminClick: () => void }) {
                             <ClipboardCheck className="h-3 w-3" />
                             {savedScore ? 'Re-attempt the quiz' : 'Do-Now Quiz'}
                           </Link>
-                        </Button>
+                        </Button>}
                       </CardContent>
                     </Card>
                   );
@@ -281,21 +285,33 @@ export function ViewerLanding({ onAdminClick }: { onAdminClick: () => void }) {
         )}
 
         {/* ── Main stage ── */}
-        <main className="relative flex-1 overflow-hidden bg-[#171116]" ref={stageRef}>
+        <main className={`relative min-w-0 flex-1 overflow-hidden bg-[#171116] ${previousPresentations.length > 0 ? 'ml-12 sm:ml-0' : ''}`} ref={stageRef}>
 
           {/* Loading */}
-          {!presentations && (
+          {!presentations && !isError && (
             <div className="flex h-full items-center justify-center">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           )}
 
+          {isError && !presentations && (
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center" role="alert">
+              <h1 className="text-xl font-semibold">Unable to load presentations</h1>
+              <p className="text-muted-foreground">Check your connection and try again.</p>
+              <Button onClick={() => void refetch()}>Try again</Button>
+            </div>
+          )}
+
           {/* No live presentation */}
           {presentations && !livePresentation && (
-            <div className="flex h-full items-center justify-center p-10">
-              <div className="max-w-sm border border-dashed border-border/50 bg-card/20 p-12 text-center rounded-xl">
+            <div className="flex h-full items-center justify-center p-4 sm:p-10">
+              <div className="max-w-md border border-border/50 bg-card/40 p-6 sm:p-10 text-center rounded-xl">
                 <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-                <p className="text-muted-foreground">No live presentation available yet.</p>
+                <h1 className="text-xl font-semibold">Waiting for your teacher</h1>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Keep this page open. Your teacher's slides will appear automatically when the lesson starts.</p>
+                {previousPresentations.length > 0 && (
+                  <Button variant="secondary" className="mt-6" onClick={() => setSidebarOpen(true)}>Browse previous lessons</Button>
+                )}
               </div>
             </div>
           )}
