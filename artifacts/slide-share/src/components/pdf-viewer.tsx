@@ -30,6 +30,9 @@ export function PdfViewer({
   const textLayerRenderRef = useRef<pdfjsLib.TextLayer | null>(null);
   const renderSequenceRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [links, setLinks] = useState<Array<{
+    url: string; left: number; top: number; width: number; height: number;
+  }>>([]);
   
   useEffect(() => {
     let active = true;
@@ -73,6 +76,7 @@ export function PdfViewer({
     const renderSequence = ++renderSequenceRef.current;
     try {
       setIsRendering(true);
+      setLinks([]);
       const pageNumber = index + 1;
       const numPages = pdfRef.current.numPages;
       if (pageNumber > numPages || pageNumber < 1) {
@@ -127,6 +131,22 @@ export function PdfViewer({
       });
 
       if (interactiveWords && textLayerRef.current) {
+        const annotations = await page.getAnnotations({ intent: 'display' });
+        if (renderSequence !== renderSequenceRef.current) return;
+        setLinks(annotations.flatMap(annotation => {
+          if (annotation.subtype !== 'Link' || !annotation.url || !annotation.rect) return [];
+          let url: URL;
+          try { url = new URL(annotation.url); } catch { return []; }
+          if (url.protocol !== 'https:' && url.protocol !== 'http:') return [];
+          const [x1, y1, x2, y2] = displayViewport.convertToViewportRectangle(annotation.rect);
+          return [{
+            url: url.href,
+            left: Math.min(x1, x2) / displayViewport.width * 100,
+            top: Math.min(y1, y2) / displayViewport.height * 100,
+            width: Math.abs(x2 - x1) / displayViewport.width * 100,
+            height: Math.abs(y2 - y1) / displayViewport.height * 100,
+          }];
+        }));
         textLayerRenderRef.current?.cancel();
         textLayerRef.current.replaceChildren();
         textLayerRef.current.style.setProperty('--total-scale-factor', String(displayViewport.scale));
@@ -211,6 +231,18 @@ export function PdfViewer({
             }}
           />
         )}
+        {interactiveWords && links.map((link, index) => (
+          <a
+            key={`${link.url}-${index}`}
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open ${link.url} in a new tab`}
+            title="Open link in a new tab"
+            className="absolute z-10 cursor-pointer rounded-sm hover:bg-yellow-300/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+            style={{ left: `${link.left}%`, top: `${link.top}%`, width: `${link.width}%`, height: `${link.height}%` }}
+          />
+        ))}
       </div>
     </div>
   );

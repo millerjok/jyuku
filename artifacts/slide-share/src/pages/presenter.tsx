@@ -168,6 +168,18 @@ export default function PresenterPage() {
   };
 
   const pronounceWord = useCallback((word: string) => {
+    // Written URLs may be plain PDF text without a hyperlink annotation.
+    if (/^(https?:\/\/|www\.)/i.test(word.trim())) {
+      try {
+        const url = new URL(word.startsWith('www.') ? `https://${word}` : word);
+        if (url.protocol === 'https:' || url.protocol === 'http:') {
+          window.speechSynthesis?.cancel();
+          setSpeakingWord(null);
+          window.open(url.href, '_blank', 'noopener,noreferrer');
+          return;
+        }
+      } catch { /* Invalid URLs retain the normal word behaviour. */ }
+    }
     if (!('speechSynthesis' in window)) {
       setSpeakingWord(null);
       return;
