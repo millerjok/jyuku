@@ -18,13 +18,13 @@ export default function ViewerPage() {
   // The slide the viewer is personally looking at (may differ from presenter's current)
   const [viewerSlide, setViewerSlide] = useState(0);
 
-  const { data: presentation, isLoading, error } = useGetPresentation(id || '', {
+  const { data: presentation, isLoading, error, refetch } = useGetPresentation(id || '', {
     query: {
       enabled: !!id,
       queryKey: getGetPresentationQueryKey(id || ''),
       refetchInterval: (query) => {
         const status = query.state.data?.status;
-        return status === 'ready' || status === 'error' ? false : 2000;
+        return status === 'error' ? false : status === 'ready' ? 5000 : 2000;
       }
     }
   });
@@ -79,7 +79,7 @@ export default function ViewerPage() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  if (isLoading || !presentation) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-foreground">
         <div className="fixed left-4 top-4">{homeButton}</div>
@@ -89,7 +89,7 @@ export default function ViewerPage() {
     );
   }
 
-  if (error || presentation.status === 'error') {
+  if (error || !presentation || presentation.status === 'error') {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-foreground p-6 text-center">
         <div className="fixed left-4 top-4">{homeButton}</div>
@@ -98,6 +98,7 @@ export default function ViewerPage() {
         </div>
         <h1 className="text-2xl font-bold mb-2">Presentation Unavailable</h1>
         <p className="text-muted-foreground">The presentation could not be loaded or encountered an error.</p>
+        <Button className="mt-6" onClick={() => void refetch()}>Try again</Button>
       </div>
     );
   }
@@ -121,7 +122,7 @@ export default function ViewerPage() {
   const liveMax = maxRevealedSlide >= 0 ? maxRevealedSlide : presentation.maxRevealedSlide;
   // During a live session: cap at the presenter's current slide so viewers can't jump ahead.
   // After the session ends: allow free navigation up to the last slide (or total slides).
-  const effectiveMax = isLiveNow ? currentSlide : (slideTotal >= 0 ? slideTotal : liveMax);
+  const effectiveMax = isLiveNow ? (liveMax < 0 ? -1 : currentSlide) : (slideTotal >= 0 ? slideTotal : liveMax);
   if (effectiveMax < 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-foreground p-6 text-center">
@@ -145,14 +146,14 @@ export default function ViewerPage() {
   const canGoNext = viewerSlide < effectiveMax;
 
   return (
-    <div ref={containerRef} className="h-screen w-full bg-background text-foreground flex flex-col overflow-hidden selection:bg-primary/30">
+    <div ref={containerRef} className="h-dvh w-full bg-background text-foreground flex flex-col overflow-hidden selection:bg-primary/30">
 
-      <header className={`absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-4 transition-opacity ${isFullscreen ? 'opacity-0 hover:opacity-100 bg-[#843b49]/90 backdrop-blur-md' : 'bg-[#843b49]/95 backdrop-blur-md border-b border-[#d8bf5e]/50'}`}>
-        <div className="flex items-center gap-4">
+      <header className={`relative z-20 flex shrink-0 items-center justify-between gap-2 px-3 py-3 sm:px-6 transition-opacity ${isFullscreen ? 'absolute top-0 left-0 right-0 opacity-0 hover:opacity-100 focus-within:opacity-100 bg-[#843b49]/90 backdrop-blur-md' : 'bg-[#843b49]/95 backdrop-blur-md border-b border-[#d8bf5e]/50'}`}>
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           {homeButton}
-          <BrandLogo compact />
-          <h1 className="text-lg font-semibold truncate max-w-[300px] md:max-w-md">{presentation.title}</h1>
-          {isConnected ? (
+          <div className="hidden sm:block"><BrandLogo compact /></div>
+          <h1 className="min-w-0 truncate text-sm font-semibold sm:text-lg" title={presentation.title}>{presentation.title}</h1>
+          {isLiveNow && (isConnected ? (
             <Badge variant="default" className="bg-green-500/20 text-green-500 hover:bg-green-500/30 gap-1.5 border-green-500/30">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               Live
@@ -162,10 +163,10 @@ export default function ViewerPage() {
               <Radio className="w-3 h-3" />
               Connecting...
             </Badge>
-          )}
+          ))}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           {presentation.slideCount != null && (
             <div className="text-sm font-medium text-[#fff8df] font-mono bg-[#6c3040] px-3 py-1 rounded-md border border-[#d8bf5e]/40">
               {String(viewerSlide + 1).padStart(2, '0')} / {String(effectiveMax + 1).padStart(2, '0')}
@@ -174,13 +175,13 @@ export default function ViewerPage() {
               )}
             </div>
           )}
-          <Button variant="ghost" size="icon" onClick={toggleFullscreen} className="text-[#fff8df] hover:bg-[#6c3040] hover:text-[#f0d875]">
+          <Button variant="ghost" size="icon" onClick={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} className="text-[#fff8df] hover:bg-[#6c3040] hover:text-[#f0d875]">
             {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
           </Button>
         </div>
       </header>
 
-      <main className="absolute inset-0 flex items-center justify-center overflow-hidden bg-black/40">
+      <main className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black/40">
         {presentation.pdfObjectPath ? (
           <PdfViewer
             pdfObjectPath={presentation.pdfObjectPath}
@@ -209,26 +210,26 @@ export default function ViewerPage() {
       </main>
 
       {/* Viewer navigation — only shown when slides have been revealed */}
-      <footer className={`absolute bottom-0 left-0 right-0 z-20 border-t border-[#d8bf5e]/30 bg-[#843b49]/90 backdrop-blur-sm px-6 py-3 flex items-center justify-center gap-4 transition-opacity ${isFullscreen ? 'opacity-0 hover:opacity-100' : ''}`}>
+      <footer className={`z-20 shrink-0 border-t border-[#d8bf5e]/30 bg-[#843b49]/90 backdrop-blur-sm px-3 py-3 flex items-center justify-center gap-2 sm:gap-4 transition-opacity ${isFullscreen ? 'absolute bottom-0 left-0 right-0 opacity-0 hover:opacity-100 focus-within:opacity-100' : ''}`}>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setViewerSlide(s => Math.max(0, s - 1))}
           disabled={!canGoPrev}
-          className="text-muted-foreground"
+          className="shrink-0 text-[#fff8df]"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
           Prev
         </Button>
-        <span className="text-xs text-muted-foreground px-2">
-          You can browse any slide the presenter has shown
+        <span className="text-center text-xs text-[#fff8df] px-2">
+          {isLiveNow ? 'Browse slides already shown' : 'Browse all slides at your own pace'}
         </span>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setViewerSlide(s => Math.min(effectiveMax, s + 1))}
           disabled={!canGoNext}
-          className="text-muted-foreground"
+          className="shrink-0 text-[#fff8df]"
         >
           Next
           <ChevronRight className="w-4 h-4 ml-1" />
